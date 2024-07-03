@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Monitor</title>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.4.4/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <link rel="stylesheet" href="/static/filter_multi_select.css">
+    <script src="/static/filter_multi_select.js"></script>
+    <style>
+        .chart {
+            margin-bottom: 50px;
+        }
+        .line {
+            fill: none;
+            stroke: steelblue;
+            stroke-width: 2px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time System Monitor</h1>
+    <div>
+        <label for="chart-selector">Select charts to display:</label>
+        <select class="filter-multi-select" id="chart-selector" name="chart-selector" multiple>
+            <option value="memory-chart" selected>Memory Usage (%)</option>
+            <option value="swap-chart" selected>Swap Usage (%)</option>
+            <option value="process-chart" selected>Number of Processes</option>
+            <option value="load-avg-chart" selected>Load Average (1 min)</option>
+            <option value="cpu-percent-chart" selected>CPU Usage (%)</option>
+        </select>
+    </div>
+    <div id="memory-chart" class="chart"></div>
+    <div id="swap-chart" class="chart"></div>
+    <div id="process-chart" class="chart"></div>
+    <div id="load-avg-chart" class="chart"></div>
+    <div id="cpu-percent-chart" class="chart"></div>
+    
+    <script>
+        var socket = io();
+
+        var width = 600;
+        var height = 50;
+        var margin = {top: 20, right: 20, bottom: 30, left: 50};
+
+        function createChart(elementId, title) {
+            var svg = d3.select(elementId).append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+            
+            svg.append("text")
+                .attr("x", (width / 2))             
+                .attr("y", 0 - (margin.top / 2))
+                .attr("text-anchor", "middle")  
+                .style("font-size", "16px") 
+                .text(title);
+            
+            var x = d3.scaleTime().range([0, width]);
+            var y = d3.scaleLinear().range([height, 0]);
+            
+            var xAxis = d3.axisBottom(x);
+            var yAxis = d3.axisLeft(y);
+            
+            var line = d3.line()
+                .x(function(d) { return x(d.time); })
+                .y(function(d) { return y(d.value); });
+            
+            svg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0," + height + ")")
+                .call(xAxis);
+            
+            svg.append("g")
+                .attr("class", "y axis")
+                .call(yAxis);
+            
+            svg.append("path")
+                .datum([])
+                .attr("class", "line")
+                .attr("d", line);
+            
+            return {
+                svg: svg,
+                x: x,
+                y: y,
+                xAxis: xAxis,
+                yAxis: yAxis,
+                line: line,
+                data: []
+            };
+        }
+
+        function updateChart(chart, newData) {
+            var now = new Date();
+            chart.data.push({time: now, value: newData});
+            if (chart.data.length > 100) chart.data.shift();
+            
+            chart.x.domain(d3.extent(chart.data, function(d) { return d.time; }));
+            chart.y.domain([0, d3.max(chart.data, function(d) { return d.value; })]);
+            
+            chart.svg.select(".line")
+                .datum(chart.data)
+                .attr("d", chart.line);
+            
+            chart.svg.select(".x.axis")
+                .call(chart.xAxis);
+            
+            chart.svg.select(".y.axis")
+                .call(chart.yAxis);
+        }
+
+        var memoryChart = createChart("#memory-chart", "Memory Usage (%)");
+        var swapChart = createChart("#swap-chart", "Swap Usage (%)");
+        var processChart = createChart("#process-chart", "Number of Processes");
+        var loadAvgChart = createChart("#load-avg-chart", "Load Average (1 min)");
+        var cpuPercentChart = createChart("#cpu-percent-chart", "CPU Usage (%)");
+
+        socket.on('system_data', function(data) {
+            updateChart(memoryChart, data.memory);
+            updateChart(swapChart, data.swap);
+            updateChart(processChart, data.processes);
+            updateChart(loadAvgChart, data.load_avg);
+            updateChart(cpuPercentChart, data.cpu_percent);
+        });
+
+        // Initialize the filter multi-select
+        fms =  $('#chart-selector').filterMultiSelect();
+        $('#chart-selector').on("optionselected", function(e) {
+                    $("#"+e.detail.value).removeClass('hidden');
+          console.log( e.detail.value);
+        });
+        $('#chart-selector').on("optiondeselected", function(e) {
+                    $("#"+e.detail.value).addClass('hidden');
+          console.log( e.detail.value);
+        });
+        /*
+        $('#chart-selector').on('optionselected', function(e) {
+           console.log(e);
+           selected= JSON.parse(fms.getSelectedOptionsAsJson()) ;
+	       console.log(selected);
+        });*/
+
+        /*
+        new FilterMultiSelect(document.getElementById('chart-selector'), {
+            placeholderText: "Select charts to display",
+            filterText: "Filter"
+        });
+        */
+
+        /*
+        document.getElementById('chart-selector').addEventListener('change', function() {
+            var selectedCharts = Array.from(this.selectedOptions).map(option => option.value);
+            document.querySelectorAll('.chart').forEach(function(chart) {
+                if (selectedCharts.includes(chart.id)) {
+                    chart.classList.remove('hidden');
+                } else {
+                    chart.classList.add('hidden');
+                }
+            });
+        });
+        */
+
+        // Trigger the change event on page load to set initial visibility
+        document.getElementById('chart-selector').dispatchEvent(new Event('change'));
+    </script>
+</body>
+</html>
+

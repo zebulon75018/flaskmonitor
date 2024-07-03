@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.4.4/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        .chart {
+            margin-bottom: 50px;
+        }
+        .line {
+            fill: none;
+            stroke: steelblue;
+            stroke-width: 2px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time System Monitor</h1>
+    <div id="memory-chart" class="chart"></div>
+    <div id="swap-chart" class="chart"></div>
+    <div id="process-chart" class="chart"></div>
+    <div id="load-avg-chart" class="chart"></div>
+    <div id="cpu-percent-chart" class="chart"></div>
+    
+    <script>
+        var socket = io();
+
+        var width = 800;
+        var height = 200;
+        var margin = {top: 20, right: 20, bottom: 30, left: 50};
+
+        function createChart(elementId, title) {
+            var svg = d3.select(elementId).append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+            
+            svg.append("text")
+                .attr("x", (width / 2))             
+                .attr("y", 0 - (margin.top / 2))
+                .attr("text-anchor", "middle")  
+                .style("font-size", "16px") 
+                .text(title);
+            
+            var x = d3.scaleTime().range([0, width]);
+            var y = d3.scaleLinear().range([height, 0]);
+            
+            var xAxis = d3.axisBottom(x);
+            var yAxis = d3.axisLeft(y);
+            
+            var line = d3.line()
+                .x(function(d) { return x(d.time); })
+                .y(function(d) { return y(d.value); });
+            
+            svg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0," + height + ")")
+                .call(xAxis);
+            
+            svg.append("g")
+                .attr("class", "y axis")
+                .call(yAxis);
+            
+            svg.append("path")
+                .datum([])
+                .attr("class", "line")
+                .attr("d", line);
+            
+            return {
+                svg: svg,
+                x: x,
+                y: y,
+                xAxis: xAxis,
+                yAxis: yAxis,
+                line: line,
+                data: []
+            };
+        }
+
+        function updateChart(chart, newData) {
+            var now = new Date();
+            chart.data.push({time: now, value: newData});
+            if (chart.data.length > 100) chart.data.shift();
+            
+            chart.x.domain(d3.extent(chart.data, function(d) { return d.time; }));
+            chart.y.domain([0, d3.max(chart.data, function(d) { return d.value; })]);
+            
+            chart.svg.select(".line")
+                .datum(chart.data)
+                .attr("d", chart.line);
+            
+            chart.svg.select(".x.axis")
+                .call(chart.xAxis);
+            
+            chart.svg.select(".y.axis")
+                .call(chart.yAxis);
+        }
+
+        var memoryChart = createChart("#memory-chart", "Memory Usage (%)");
+        var swapChart = createChart("#swap-chart", "Swap Usage (%)");
+        var processChart = createChart("#process-chart", "Number of Processes");
+        var loadAvgChart = createChart("#load-avg-chart", "Load Average (1 min)");
+        var cpuPercentChart = createChart("#cpu-percent-chart", "CPU Usage (%)");
+
+        socket.on('system_data', function(data) {
+            updateChart(memoryChart, data.memory);
+            updateChart(swapChart, data.swap);
+            updateChart(processChart, data.processes);
+            updateChart(loadAvgChart, data.load_avg);
+            updateChart(cpuPercentChart, data.cpu_percent);
+        });
+    </script>
+</body>
+</html>
+
