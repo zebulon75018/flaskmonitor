@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Information</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            margin-bottom: 10px;
+        }
+        .item {
+            margin-bottom: 5px;
+        }
+        .item span {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>System Information</h1>
+    <div id="data-container">
+        <!-- Data will be loaded here -->
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $.ajax({
+                url: '/execute_command',
+                type: 'GET',
+                success: function(data) {
+                    let container = $('#data-container');
+                    data.output.forEach(section => {
+                        let sectionKey = Object.keys(section)[0];
+                        let sectionData = section[sectionKey];
+                        let sectionTitle = sectionKey.split('#').pop();
+                        
+                        let sectionDiv = $('<div>', { class: 'section' });
+                        sectionDiv.append($('<h2>').text(sectionTitle));
+                        
+                        sectionData.forEach(item => {
+                            let itemDiv = $('<div>', { class: 'item' });
+                            Object.keys(item).forEach(key => {
+                                let keyParts = key.split('#');
+                                let label = keyParts.pop();
+                                let value = item[key];
+                                itemDiv.append($('<div>').html(`<span>${label}:</span> ${value}`));
+                            });
+                            sectionDiv.append(itemDiv);
+                        });
+
+                        container.append(sectionDiv);
+                    });
+                },
+                error: function() {
+                    $('#data-container').html('<p>Error loading data.</p>');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
